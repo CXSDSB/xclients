@@ -1,27 +1,14 @@
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass
 
 import cv2
-import jax
 import numpy as np
 import tyro
 from rich import print
 from webpolicy.client import Client
 
-
-def spec(tree: dict[str, jax.Array] | jax.Array):
-    return jax.tree.map(
-        lambda x: (x.shape, x.dtype) if isinstance(x, jax.Array | np.ndarray) else type(x), tree
-    )
-
-
-@dataclass
-class Config:
-    host: str = "127.0.0.1"
-    port: int = 8080
-    show: bool = False
+from .common import Config, spec
 
 
 def main(cfg: Config) -> None:
