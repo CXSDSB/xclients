@@ -11,6 +11,7 @@ members = [
   "plugins/hamer",
   "plugins/server_camera",
   "plugins/server_da3",
+  "plugins/server_sam3do",
 ]
 
 
@@ -49,8 +50,17 @@ src = ["src", "tests"]
 [tool.pyright]
 include = ["src", "tests"]
 reportMissingTypeStubs = false
-pythonVersion = "3.10"
 
 [tool.coverage.run]
 source = ["yourpkg"]
 branch = true
+
+[tool.uv]
+conflicts = [
+    [
+      { package = "server-hamer"},
+      { package = "server-da3"},
+      { package = "server-camera"},
+      { package = "server-sam3do"},
+    ],
+]

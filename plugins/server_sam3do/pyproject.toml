@@ -1,0 +1,20 @@
+[project]
+name = "server-sam3do"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+]
+
+
+[tool.uv]
+override-dependencies = [
+"torchaudio",
+]
+
+
+[tool.uv.overrides]
+torch = "==2.5.1"
+torchaudio = "==2.5.1"
+
