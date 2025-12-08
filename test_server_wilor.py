@@ -9,7 +9,7 @@ print("Loaded:", type(policy))
 dummy = np.zeros((480, 640, 3), dtype=np.uint8)
 
 # test step()
-result = policy.step(dummy)
+result = policy.step({"image": dummy})
 print("Result:", result)
 
 # test with a real image
@@ -20,5 +20,5 @@ img = cv2.imread(img_path)
 img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
 
 print("\nTesting with REAL image:", img_path)
-real_result = policy.step(img)
+real_result = policy.step({"image": img})
 print("Real Image Result:", real_result)

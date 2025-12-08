@@ -1,38 +1,46 @@
-# I put realword model in dummy.py for testing 
-# (because I didn't change file when I switch fake model test to a real one)
-# And sorry for the messy, I still left many notes for myelfe fo future adjustment
-
-import sys, os
-sys.path.append(os.path.join(os.path.dirname(__file__), "../../WiLoR"))
+import os
+import sys
 import torch
 import cv2
 import numpy as np
+from pathlib import Path
+
+from dataclasses import dataclass
+
+@dataclass
+class WilorConfig:
+    image: str = None
+
+
+PLUGIN_DIR = Path(__file__).parent
+ROOT_DIR   = (PLUGIN_DIR / "../../../../").resolve()         # xclients/
+WILOR_ROOT = (ROOT_DIR / "external/wilor").resolve()         # xclients/external/wilor
+sys.path.append(str(WILOR_ROOT))
+
+WEBPOLICY_SRC = (PLUGIN_DIR / "../../external/webpolicy/src").resolve()
+sys.path.append(str(WEBPOLICY_SRC))
+
+from webpolicy.base_policy import BasePolicy   
 
 from wilor.models import WiLoR, load_wilor
 from wilor.utils import recursive_to
 from wilor.datasets.vitdet_dataset import ViTDetDataset
 from wilor.utils.renderer import Renderer, cam_crop_to_full
 from ultralytics import YOLO
-# from .dummy import DummyWiLoR, DummyYOLO, fake_cfg
 from .dummy import RealWiLoR, RealYOLO, real_cfg
 LIGHT_PURPLE=(0.25098039,  0.274117647,  0.65882353)
 
-class WilorModel:
+class WilorModel(BasePolicy):
     def __init__(self):
         print("[WilorModel] Model in dummy active.")
-        self.device = "cpu"
-        # self.model = DummyWiLoR()
-        # self.detector = DummyYOLO()
-        # self.cfg = fake_cfg()
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-        WILOR_ROOT = "/home/lliao2/WiLoR"
-
-        ckpt = f"{WILOR_ROOT}/pretrained_models/wilor_final.ckpt"
-        cfg  = f"{WILOR_ROOT}/pretrained_models/model_config.yaml"
-        det  = f"{WILOR_ROOT}/pretrained_models/detector.pt"
+        ckpt = WILOR_ROOT / "pretrained_models" / "wilor_final.ckpt"
+        cfg  = WILOR_ROOT / "pretrained_models" / "model_config.yaml"
+        det  = WILOR_ROOT / "pretrained_models" / "detector.pt"
 
         self.model = RealWiLoR(ckpt, cfg, self.device)
-        self.cfg = real_cfg(cfg)()
+        self.cfg = real_cfg(cfg)
         self.detector = RealYOLO(det, self.device)
 
 
@@ -47,9 +55,7 @@ class WilorModel:
     #     return det.to(device)
     
 
-
     # def load_renderer(self, model_cfg, model.mano.faces)
-    
 
 
     def detect_hands(self, image):
@@ -62,8 +68,6 @@ class WilorModel:
             boxes.append(box)
             is_right.append(hand_type)
         return np.array(boxes), np.array(is_right)
-
-
 
     def preprocess(self, image, boxes, is_right, rescale_factor):
         dataset = ViTDetDataset(
@@ -94,16 +98,27 @@ class WilorModel:
     def postprocess(self, out, batch):
 
         # l/r hand multiplier（right=+1，left=-1）
-        multiplier = (2 * batch['right'] - 1)
+        # multiplier = (2 * batch['right'] - 1)
+        multiplier = (2 * batch['right'] - 1).to(self.device)
 
         # camera prameter（crop coord）
         pred_cam = out['pred_cam']
         pred_cam[:, 1] = multiplier * pred_cam[:, 1]  # Correct the X-axis flip
 
         # set cam_crop_to_full data
-        box_center = batch["box_center"].float()
-        box_size   = batch["box_size"].float()
-        img_size   = batch["img_size"].float()
+        # move center and size tensors to the correct device
+        box_center = batch["box_center"].float().to(self.device)
+        box_size   = batch["box_size"].float().to(self.device)
+
+        # derive image size from batch["img"]
+        img = batch["img"]
+        if img.dim() == 3:
+            # single image: (C, H, W) -> (1, C, H, W)
+            img = img.unsqueeze(0)
+        B, C, H, W = img.shape
+
+        # cam_crop_to_full expects img_size of shape (B, 2): [[W, H], ...]
+        img_size = torch.tensor([[W, H]] * B, dtype=torch.float32, device=self.device)
 
         scaled_focal_length = (
             self.cfg.EXTRA.FOCAL_LENGTH
@@ -112,9 +127,24 @@ class WilorModel:
         )
 
         # change cam to full image coord
+        # construct cam_bbox on the correct device
+        # box_size may be 1D (B,) or 2D (B, 2); handle both
+        if box_size.dim() == 1:
+            w = h = box_size
+        else:
+            w = box_size[:, 0]
+            h = box_size[:, 1]
+
+        cam_bbox = torch.stack([
+            box_center[:, 0] - w / 2,
+            box_center[:, 1] - h / 2,
+            box_center[:, 0] + w / 2,
+            box_center[:, 1] + h / 2,
+        ], dim=1).to(self.device)
+
         pred_cam_t_full = cam_crop_to_full(
             pred_cam,
-            box_center,
+            cam_bbox,
             box_size,
             img_size,
             scaled_focal_length
@@ -147,13 +177,13 @@ class WilorModel:
         return all_verts, all_cam_t, all_right
 
 
-
     # def render(self, vert, cams, original image)
     # # return final rendered image（numpy array）
     
 
-
-    def step(self, image):
+    # def step(self, image):
+    def step(self, payload: dict) -> dict:
+        image = payload["image"]
 
         # detect
         boxes, is_right = self.detect_hands(image)
@@ -176,8 +206,18 @@ class WilorModel:
         # return final structured output
         return {
             "status": "ok",
-            "hands": len(verts_list),
             "verts": verts_list,
             "cams": cams_list,
             "right": right_list
         }
+
+def main(cfg: WilorConfig):
+    model = WilorModel()
+    image = cv2.imread(cfg.image)
+    image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+    result = model.step({"image": image})
+    print("CLI Result:", result)
+
+if __name__ == "__main__":
+    cfg = tyro.cli(WilorConfig)
+    main(cfg)
