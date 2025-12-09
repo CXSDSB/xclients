@@ -1,6 +1,7 @@
 import sys
 from pathlib import Path
 
+
 from server_wilor.server import WilorModel
 from dataclasses import dataclass
 import tyro
@@ -30,6 +31,8 @@ def demo():
     print(len(outputs))
     print(outputs[0]['wilor_preds'].keys())
 
+    
+
 def main(cfg: WilorConfig):
     """Standalone debug mode."""
     print("[main] Running WilorModel standalone...")
@@ -44,6 +47,12 @@ def main(cfg: WilorConfig):
 
     print("[main] WilorModel loaded successfully (debug mode).")
 
+def load():
+        """
+        SAM3 server expects each plugin to expose a `load()` function
+        that returns an initialized model instance.
+        """
+        return WilorModel()    
 
 if __name__ == "__main__":
     main(tyro.cli(WilorConfig))
