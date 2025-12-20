@@ -39,14 +39,13 @@ class RealWiLoR:
         self.model, self.cfg = load_wilor(ckpt_path, cfg_path)
         self.model = self.model.to(device).eval()
 
-        # 解冻 config（关键修复点）
+        
         self.cfg.defrost()
 
         mano_root = "/home/lliao2/WiLoR/mano_data"
         self.cfg.MANO.MANO_PATH = mano_root
         self.cfg.MANO.MEAN_PARAMS = f"{mano_root}/mano_mean_params.npz"
 
-        # 再冻回去（可选）
         self.cfg.freeze()
 
         print("[RealWiLoR] Loaded WiLoR successfully.")
