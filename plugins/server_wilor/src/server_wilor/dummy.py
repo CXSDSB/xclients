@@ -62,7 +62,6 @@ class RealWiLoR:
 
 
 class RealYOLO:
-    """Real YOLO detector wrapper."""
 
     def __init__(self, detector_path, device):
         print("[RealYOLO] Loading YOLO...")
