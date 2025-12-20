@@ -9,9 +9,6 @@ from wilor_mini.pipelines.wilor_hand_pose3d_estimation_pipeline import (
     WiLorHandPose3dEstimationPipeline,
 )
 
-# from server_wilor.server import WilorModel
-
-
 @dataclass
 class WilorConfig:
     host: str = "0.0.0.0"
@@ -43,7 +40,6 @@ class WilorPolicy(BasePolicy):
     def step(self, payload: dict) -> dict:
         image = payload["image"]
         out = self.pipe.predict(image)
-        # TODO use jax.tree.map(lambda *xs: np.stack([xs]) , *out) if multiple batch
         return out[0]
 
 
@@ -52,8 +48,6 @@ def main(cfg: WilorConfig):
 
     server = Server(policy=WilorPolicy(cfg), host=cfg.host, port=cfg.port)
     server.serve()
-    # demo()
-
 
 if __name__ == "__main__":
     main(tyro.cli(WilorConfig))
